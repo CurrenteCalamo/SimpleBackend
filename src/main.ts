@@ -1,19 +1,20 @@
-import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+import { ArgumentMetadata, Injectable, PipeTransform } from '@nestjs/common';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ValidationException } from 'exceptions/validation.exception';
 
-async function bootstrap() {
-  const PORT = process.env.PORT || 5000;
-  const app = await NestFactory.create(AppModule);
+@Injectable()
+export class ValidationPipe implements PipeTransform<any> {
+  async transform(value: any, metadata: ArgumentMetadata): Promise<any> {
+    const obj = plainToClass(metadata.metatype, value);
+    const errors = await validate(obj);
 
-  const config = new DocumentBuilder()
-    .setTitle('Simple backend on nest.js.')
-    .setDescription('Documentation Rest Api')
-    .setVersion('1.0.0')
-    .addTag('Version1')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('/api/docs', app, document);
-  await app.listen(PORT);
+    if (errors.length) {
+      let messages = errors.map((err) => {
+        return `${err.property} - ${Object.values(err.constraints).join(', ')}`;
+      });
+      throw new ValidationException(messages);
+    }
+    return value;
+  }
 }
-bootstrap();
